@@ -493,7 +493,8 @@ class CP_Push {
 
 	/**
 	 * 星河兼容话题：本地 abp_topic 话题 → 生产站 thread 话题帖（按标题查重复用）。
-	 * 关联：尝试写 thread 帖的 xhai_postparent=远端文章 ID；meta 未开放（400）则降级，话题帖照建。
+	 * 关联：thread 帖写 xhai_postparent=远端文章 ID；文章写 xhai_thread=threadID 列表（覆盖式）。
+	 * 目标站需装配套兼容插件（target/），否则创建/关联会被目标站拒绝或忽略。
 	 *
 	 * @param CP_Client $client          客户端。
 	 * @param int       $remote_post_id  远端文章 ID。
@@ -515,11 +516,19 @@ class CP_Push {
 				continue;
 			}
 			$ids[] = $tid;
-			// 尝试建立文章↔话题关联（星河数据结构：thread 帖 xhai_postparent = 文章 ID）。
+			// thread 帖 → 文章关联（星河数据结构：thread 帖 xhai_postparent = 文章 ID）。
 			try {
 				$client->put( '/wp-json/wp/v2/thread/' . $tid, array( 'meta' => array( 'xhai_postparent' => $remote_post_id ) ) );
 			} catch ( CP_Error $e ) {
-				CP_Log::warn( 'topic', sprintf( '话题《%s》关联文章 %d 失败（目标站 meta 未开放，话题帖已建）：%s', $name, $remote_post_id, $e->getMessage() ) );
+				CP_Log::warn( 'topic', sprintf( '话题《%s》thread 帖关联文章 %d 失败（目标站需装配套兼容插件）：%s', $name, $remote_post_id, $e->getMessage() ) );
+			}
+		}
+		// 文章 → 话题关联（覆盖式写入本次话题集合）。
+		if ( $ids ) {
+			try {
+				$client->put( '/wp-json/wp/v2/posts/' . $remote_post_id, array( 'meta' => array( 'xhai_thread' => $ids ) ) );
+			} catch ( CP_Error $e ) {
+				CP_Log::warn( 'topic', sprintf( '文章 %d 写入 xhai_thread 话题关联失败（目标站需装配套兼容插件）：%s', $remote_post_id, $e->getMessage() ) );
 			}
 		}
 		return $ids;

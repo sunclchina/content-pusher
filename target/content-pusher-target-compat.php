@@ -1,15 +1,17 @@
 <?php
 /**
  * Plugin Name: 内容推送-目标站兼容（星河话题）
- * Description: 恢复 thread 文章类型（星河AI工具箱话题帖）的 REST 创建权限 create_posts。
- *              供「内容推送」插件以星河兼容模式推送话题帖使用。仅恢复 REST 创建能力，不影响星河原有流程。
- * Version:     1.0.0
+ * Description: ① 恢复 thread 文章类型（星河AI工具箱话题帖）的 REST 创建权限 create_posts；
+ *              ② 注册星河话题关联 meta（xhai_postparent / xhai_thread）的 REST 读写。
+ *              供「内容推送」插件以星河兼容模式推送话题帖并建立文章↔话题关联。不影响星河原有流程。
+ * Version:     1.1.0
  * Author:      青崖
  * Requires at least: 6.0
  * Requires PHP: 7.4
  *
- * 背景：星河AI工具箱注册 thread 类型时把 create_posts 显式设为 false（话题帖只能由星河 AI 流程创建），
- * 导致外部 REST 无法创建话题帖。「内容推送」推送星河话题需要此兼容插件放开创建权限。
+ * 背景：星河AI工具箱注册 thread 类型时把 create_posts 设为 false（话题帖只能由星河 AI 流程创建），
+ * 且其关联 meta（thread 帖 xhai_postparent=文章ID / 文章 xhai_thread=threadID 列表）未开放 REST，
+ * 外部无法创建话题帖与建立关联。「内容推送」推送星河话题需要此兼容插件放开这两处。
  *
  * @package Content_Pusher_Compat
  */
@@ -18,6 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// ① 恢复 thread 类型 REST 创建权限。
 add_filter(
 	'register_post_type_args',
 	function ( $args, $post_type ) {
@@ -31,4 +34,32 @@ add_filter(
 	},
 	20,
 	2
+);
+
+// ② 注册星河话题关联 meta 的 REST 读写（数据结构与星河一致：thread 帖 xhai_postparent=文章ID；
+//    文章 xhai_thread=threadID 列表）。
+add_action(
+	'init',
+	function () {
+		register_post_meta(
+			'thread',
+			'xhai_postparent',
+			array(
+				'type'         => 'integer',
+				'single'       => true,
+				'show_in_rest' => true,
+				'default'      => 0,
+			)
+		);
+		register_post_meta(
+			'post',
+			'xhai_thread',
+			array(
+				'type'         => 'integer',
+				'single'       => false,
+				'show_in_rest' => true,
+			)
+		);
+	},
+	11
 );
