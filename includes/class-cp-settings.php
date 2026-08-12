@@ -41,6 +41,7 @@ class CP_Settings {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_init', array( __CLASS__, 'register' ) );
 		add_action( 'admin_post_cp_test_connection', array( __CLASS__, 'handle_test' ) );
+		add_action( 'wp_ajax_cp_test_connection', array( __CLASS__, 'handle_test' ) ); // JS 走 admin-ajax.php（ajaxurl）
 		add_action( 'admin_post_cp_clear_log', array( __CLASS__, 'handle_clear_log' ) );
 	}
 
