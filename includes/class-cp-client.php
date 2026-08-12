@@ -255,11 +255,12 @@ class CP_Client {
 			return array( 'ok' => false, 'error' => '请先填写目标站地址与应用密码' );
 		}
 		try {
-			$me  = $this->get( '/wp-json/wp/v2/users/me' );
+			// context=edit + _fields 明确请求 roles/capabilities（默认 view 上下文不返回这两个字段，会误判权限）。
+			$me  = $this->get( '/wp-json/wp/v2/users/me', array( 'context' => 'edit', '_fields' => 'id,name,slug,roles,capabilities' ) );
 			$tax = $this->get( '/wp-json/wp/v2/taxonomies' );
 			$taxes = is_array( $tax ) ? array_keys( $tax ) : array();
 			update_option( CP_TAX_CACHE, $taxes, false );
-			$caps = isset( $me['capabilities'] ) && is_array( $me['capabilities'] ) ? $me['capabilities'] : array();
+			$caps = isset( $me['capabilities'] ) ? (array) $me['capabilities'] : array();
 			return array(
 				'ok'         => true,
 				'user'       => isset( $me['name'] ) ? $me['name'] : ( isset( $me['slug'] ) ? $me['slug'] : '?' ),
