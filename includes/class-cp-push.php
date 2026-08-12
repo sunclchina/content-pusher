@@ -126,6 +126,11 @@ class CP_Push {
 			update_post_meta( $post_id, CP_META_LAST_PUSH, current_time( 'mysql' ) );
 			delete_post_meta( $post_id, CP_META_LAST_ERROR );
 
+			// 星河兼容话题：文章就位后，把本地话题建为生产站 thread 话题帖（需要远端文章 ID 做关联）。
+			if ( in_array( 'topics', $include, true ) && 'thread' === self::topic_mode( $settings ) ) {
+				self::push_thread_topics( $client, $remote_id, $post, $settings, $summary );
+			}
+
 			if ( in_array( 'comments', $include, true ) && ! empty( $settings['push_comments'] ) ) {
 				$cr = self::push_comments( $client, $post_id, $remote_id, $settings );
 				$summary['comments_pushed']  = $cr['pushed'];
@@ -343,7 +348,8 @@ class CP_Push {
 		}
 
 		// 话题（勾选 topics 才推）：目标站有 abp_topic 分类法（相关插件）→ 建术语；否则落为标签。
-		if ( in_array( 'topics', $include, true ) ) {
+		// thread（星河兼容）模式不在这里建标签，由主流程推完文章后建 thread 话题帖。
+		if ( in_array( 'topics', $include, true ) && 'thread' !== self::topic_mode( $settings ) ) {
 			$topic_ids = self::push_topics( $client, $post, $settings, $summary );
 			if ( $topic_ids ) {
 				$payload[ self::topic_param( $settings ) ] = $topic_ids;
@@ -460,10 +466,11 @@ class CP_Push {
 	/* ================= 术语（分类/标签/话题） ================= */
 
 	/**
-	 * 话题推送方式：auto = 目标站有 abp_topic 分类法（相关插件）用 abp_topic，否则用标签。
+	 * 话题推送方式：auto = 目标站有 abp_topic 分类法（相关插件）用 abp_topic，否则用标签；
+	 * thread = 星河兼容（目标站有星河插件时，话题建为 thread 话题帖）；off = 不推。
 	 *
 	 * @param array $settings 设置。
-	 * @return string off|post_tag|abp_topic
+	 * @return string off|post_tag|abp_topic|thread
 	 */
 	private static function topic_mode( $settings ) {
 		$mode = isset( $settings['topic_mode'] ) ? $settings['topic_mode'] : 'auto';
@@ -482,6 +489,100 @@ class CP_Push {
 	 */
 	private static function topic_param( $settings ) {
 		return 'abp_topic' === self::topic_mode( $settings ) ? 'abp_topic' : 'tags';
+	}
+
+	/**
+	 * 星河兼容话题：本地 abp_topic 话题 → 生产站 thread 话题帖（按标题查重复用）。
+	 * 关联：尝试写 thread 帖的 xhai_postparent=远端文章 ID；meta 未开放（400）则降级，话题帖照建。
+	 *
+	 * @param CP_Client $client          客户端。
+	 * @param int       $remote_post_id  远端文章 ID。
+	 * @param WP_Post   $post            本地文章。
+	 * @param array     $settings        设置。
+	 * @param array     $summary         汇总（引用）。
+	 * @return int[] 生产站 thread 帖 ID 列表。
+	 * @throws CP_Error
+	 */
+	private static function push_thread_topics( $client, $remote_post_id, $post, $settings, &$summary ) {
+		$names = wp_get_post_terms( $post->ID, 'abp_topic', array( 'fields' => 'names' ) );
+		if ( is_wp_error( $names ) || ! $names ) {
+			return array();
+		}
+		$ids = array();
+		foreach ( (array) $names as $name ) {
+			$tid = self::ensure_thread( $client, $name, $summary );
+			if ( ! $tid ) {
+				continue;
+			}
+			$ids[] = $tid;
+			// 尝试建立文章↔话题关联（星河数据结构：thread 帖 xhai_postparent = 文章 ID）。
+			try {
+				$client->put( '/wp-json/wp/v2/thread/' . $tid, array( 'meta' => array( 'xhai_postparent' => $remote_post_id ) ) );
+			} catch ( CP_Error $e ) {
+				CP_Log::warn( 'topic', sprintf( '话题《%s》关联文章 %d 失败（目标站 meta 未开放，话题帖已建）：%s', $name, $remote_post_id, $e->getMessage() ) );
+			}
+		}
+		return $ids;
+	}
+
+	/**
+	 * 确保目标站存在该话题帖（thread 类型），按标题精确匹配，缺失则创建。结果缓存到 CP_TERM_MAP['thread']。
+	 *
+	 * @param CP_Client $client  客户端。
+	 * @param string    $name    话题名。
+	 * @param array     $summary 汇总（引用）。
+	 * @return int thread 帖 ID，0 表示跳过。
+	 * @throws CP_Error
+	 */
+	private static function ensure_thread( $client, $name, &$summary ) {
+		$name = trim( (string) $name );
+		if ( '' === $name ) {
+			return 0;
+		}
+		$map = get_option( CP_TERM_MAP, array() );
+		$map = is_array( $map ) ? $map : array();
+		if ( isset( $map['thread'][ $name ] ) ) {
+			return (int) $map['thread'][ $name ];
+		}
+
+		$found = $client->get( '/wp-json/wp/v2/thread', array( 'search' => $name, 'per_page' => 100 ) );
+		$id    = 0;
+		if ( is_array( $found ) ) {
+			foreach ( $found as $item ) {
+				if ( ! is_array( $item ) ) {
+					continue;
+				}
+				$t = isset( $item['title'] ) ? $item['title'] : '';
+				if ( is_array( $t ) && isset( $t['rendered'] ) ) {
+					$t = $t['rendered'];
+				}
+				if ( $t === $name ) {
+					$id = (int) $item['id'];
+					break;
+				}
+			}
+		}
+		if ( ! $id ) {
+			$r = $client->post(
+				'/wp-json/wp/v2/thread',
+				array(
+					'title'   => $name,
+					'content' => '',
+					'status'  => 'publish',
+				)
+			);
+			if ( is_array( $r ) && ! empty( $r['id'] ) ) {
+				$id = (int) $r['id'];
+				$summary['terms_created']++;
+			} else {
+				throw new CP_Error( '创建话题帖（thread）失败：' . CP_Client::snippet( $r ) );
+			}
+		}
+		if ( $id ) {
+			$map['thread'][ $name ] = $id;
+			update_option( CP_TERM_MAP, $map, false );
+		}
+		return $id;
 	}
 
 	/**

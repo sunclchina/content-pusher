@@ -4,7 +4,7 @@ Tags: sync, rest-api, push, comments, https
 Requires at least: 6.0
 Tested up to: 7.0.3
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -30,6 +30,10 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 4. 从文章列表行操作/批量操作或编辑页推送；开启自动推送后本地发布即自动推送。
 
 == Changelog ==
+
+= 1.2.0 =
+* 话题新增星河兼容模式：thread 话题帖推送（查重复用，关联 meta 未开放时降级）。
+* 连接测试权限探测修复（context=edit）。
 
 = 1.1.0 =
 * 新增推送管理页：选文章 → 单篇一键/批量推送；推送可选封面/摘要/评论/话题；同名查重可选跳过/覆盖。
