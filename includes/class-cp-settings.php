@@ -154,7 +154,7 @@ class CP_Settings {
 						<td>
 							<button type="button" class="button" id="cp-test-btn">测试连接</button>
 							<span id="cp-test-result" class="cp-test-result"></span>
-							<p class="description">验证应用密码、读取目标站分类法（决定话题映射：目标站有 abp_topic 话题插件则话题按话题推送，否则落为标签）。</p>
+							<p class="description">按当前表单填写值测试（无需先保存；密码框留空则用已保存密码）。验证应用密码、读取目标站分类法（决定话题映射：目标站有 abp_topic 话题插件则话题按话题推送，否则落为标签）。</p>
 						</td>
 					</tr>
 				</table>
@@ -235,6 +235,9 @@ class CP_Settings {
 				var body = new URLSearchParams();
 				body.set('action', 'cp_test_connection');
 				body.set('nonce', <?php echo wp_json_encode( wp_create_nonce( 'cp_test' ) ); ?>);
+				body.set('target_url', document.getElementById('cp_target_url').value);
+				body.set('app_user', document.getElementById('cp_app_user').value);
+				body.set('app_password', document.getElementById('cp_app_password').value);
 				fetch(ajaxurl, { method: 'POST', body: body, credentials: 'same-origin' })
 					.then(function (r) { return r.json(); })
 					.then(function (j) {
@@ -295,15 +298,36 @@ class CP_Settings {
 	}
 
 	/**
-	 * AJAX：测试连接。
+	 * AJAX：测试连接。优先用表单当前值（无需先保存）；密码留空回退已保存密码。
 	 */
 	public static function handle_test() {
 		check_ajax_referer( 'cp_test', 'nonce' );
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( '无权限', 403 );
 		}
-		$settings = get_option( CP_OPTION, array() );
-		$client   = new CP_Client( is_array( $settings ) ? $settings : array() );
+		$saved = get_option( CP_OPTION, array() );
+		$saved = is_array( $saved ) ? $saved : array();
+
+		$form = array(
+			'target_url'   => isset( $_POST['target_url'] ) ? sanitize_text_field( wp_unslash( $_POST['target_url'] ) ) : '',
+			'app_user'     => isset( $_POST['app_user'] ) ? sanitize_text_field( wp_unslash( $_POST['app_user'] ) ) : '',
+			'app_password' => isset( $_POST['app_password'] ) ? trim( wp_unslash( $_POST['app_password'] ) ) : '',
+		);
+		if ( '' === $form['app_password'] ) {
+			$form['app_password'] = isset( $saved['app_password'] ) ? $saved['app_password'] : '';
+		}
+		if ( '' === $form['app_user'] ) {
+			$form['app_user'] = isset( $saved['app_user'] ) ? $saved['app_user'] : '';
+		}
+
+		$url_err = CP_Client::validate_url( $form['target_url'] );
+		if ( '' !== $url_err ) {
+			wp_send_json( array( 'ok' => false, 'error' => $url_err ) );
+		}
+		$form['target_url'] = rtrim( preg_replace( '#/wp-json/?.*$#i', '', $form['target_url'] ), '/' );
+
+		$settings = wp_parse_args( $form, CP_Settings::defaults() );
+		$client   = new CP_Client( $settings );
 		wp_send_json( $client->test_connection() );
 	}
 
