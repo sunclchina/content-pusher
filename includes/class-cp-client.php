@@ -147,12 +147,16 @@ class CP_Client {
 				$json = json_decode( $body, true );
 				return null === $json ? $body : $json;
 			}
-			// Wordfence 速率限制（403「访问过于频繁，请稍后再试」）：等待后重试，避免全量推送被中断。
-			if ( 403 === $code && ( false !== strpos( $body, '频繁' ) || false !== strpos( $body, '稍后' ) ) && $attempt < 2 ) {
-				$wait = 60 * ( $attempt + 1 );
-				CP_Log::warn( 'connection', sprintf( '目标站限流（403），等待 %d 秒后重试：%s', $wait, self::snippet( $body, 120 ) ) );
-				sleep( $wait );
-				continue;
+			// Wordfence 速率限制（403「访问过于频繁，请稍后再试」，消息为 Unicode 转义 JSON）：等待后重试。
+			if ( 403 === $code && $attempt < 2 && false !== strpos( $body, 'wp_die' ) ) {
+				$decoded = json_decode( $body, true );
+				$msg     = is_array( $decoded ) && isset( $decoded['message'] ) ? (string) $decoded['message'] : $body;
+				if ( false !== strpos( $msg, '频繁' ) || false !== strpos( $msg, '稍后' ) ) {
+					$wait = 60 * ( $attempt + 1 );
+					CP_Log::warn( 'connection', sprintf( '目标站限流（403），等待 %d 秒后重试：%s', $wait, self::snippet( $msg, 120 ) ) );
+					sleep( $wait );
+					continue;
+				}
 			}
 			if ( $code >= 500 ) {
 				if ( $attempt < $this->retries ) {
