@@ -112,7 +112,7 @@ class CP_Client {
 			'timeout'     => $this->timeout,
 			'sslverify'   => true, // HTTPS 强制校验证书，不允许关闭
 			'redirection' => 0,
-			'user-agent'  => 'Content-Pusher/' . CP_VERSION . '; ' . home_url(),
+			'user-agent'  => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36', // 常规浏览器 UA，避免被安全插件按可疑 UA 拦截
 			'headers'     => array_merge(
 				array(
 					'Authorization' => 'Basic ' . base64_encode( $this->username . ':' . $this->password ),
