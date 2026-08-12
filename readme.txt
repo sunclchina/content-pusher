@@ -4,7 +4,7 @@ Tags: sync, rest-api, push, comments, https
 Requires at least: 6.0
 Tested up to: 7.0.3
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -30,9 +30,6 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 4. 从文章列表行操作/批量操作或编辑页推送；开启自动推送后本地发布即自动推送。
 
 == Changelog ==
-
-= 1.0.1 =
-* 新增备用渠道：文件导出（WXR 标准格式，含文章/评论/话题）；设置页注明导入时需在目标站安装相应导入插件（如 wordpress-importer）。
 
 = 1.0.0 =
 * 首版。
