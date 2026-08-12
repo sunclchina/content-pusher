@@ -19,6 +19,7 @@ class CP_Manage {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_post_cp_push_one', array( __CLASS__, 'handle_push_one' ) );
 		add_action( 'admin_post_cp_bulk_push', array( __CLASS__, 'handle_bulk_push' ) );
+		add_action( 'admin_post_cp_full_sync', array( __CLASS__, 'handle_full_sync' ) );
 	}
 
 	/**
@@ -109,6 +110,20 @@ class CP_Manage {
 					<label><input type="checkbox" id="cp-inc-comments" <?php checked( in_array( 'comments', $include_default, true ) ); ?> /> 评论</label>
 					<label><input type="checkbox" id="cp-inc-topics" <?php checked( in_array( 'topics', $include_default, true ) ); ?> /> 话题</label>
 					<button class="button button-primary" type="submit" <?php echo $configured ? '' : 'disabled'; ?>>推送勾选文章（后台排队）</button>
+					<span class="cp-full-wrap">
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="cp-full-form" style="display:inline">
+							<input type="hidden" name="action" value="cp_full_sync" />
+							<?php wp_nonce_field( 'cp_full_sync' ); ?>
+							<input type="hidden" name="dedup" data-cp-dedup="1" value="<?php echo esc_attr( $dedup ); ?>" />
+							<input type="hidden" name="include[]" value="cover" data-cp-field="inc-cover" />
+							<input type="hidden" name="include[]" value="excerpt" data-cp-field="inc-excerpt" />
+							<input type="hidden" name="include[]" value="comments" data-cp-field="inc-comments" />
+							<input type="hidden" name="include[]" value="topics" data-cp-field="inc-topics" />
+							<button type="submit" class="button" <?php echo $configured ? '' : 'disabled'; ?>
+								onclick="return confirm('全量同步：将按当前配置推送全部已发布文章（更新+评论+图片），后台排队逐篇执行。确认开始？');">全量同步</button>
+						</form>
+					</span>
+					<span class="cp-config-hint">「全量同步」= 全部已发布文章，手动触发；默认不自动执行。</span>
 				</div>
 
 				<table class="widefat striped cp-manage-table">
@@ -225,6 +240,48 @@ class CP_Manage {
 			.cp-muted { color: #999; font-size: 11px; }
 		</style>
 		<?php
+	}
+
+	/**
+	 * 全量同步：按当前配置（查重/包含内容）排队推送全部已发布文章，WP-Cron 后台逐篇执行。
+	 * 默认不执行，仅手动点击触发。
+	 */
+	public static function handle_full_sync() {
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_die( -1 );
+		}
+		check_admin_referer( 'cp_full_sync' );
+		$opts = self::read_opts();
+		$opts = array(
+			'include' => $opts['include'],
+			'dedup'   => $opts['dedup'],
+		);
+		$posts = get_posts(
+			array(
+				'post_type'     => 'post',
+				'post_status'   => 'publish',
+				'numberposts'   => -1,
+				'fields'        => 'ids',
+				'no_found_rows' => true,
+			)
+		);
+		$queued = 0;
+		foreach ( $posts as $id ) {
+			$id = (int) $id;
+			if ( wp_next_scheduled( 'cp_push_post_event', array( $id, $opts ) ) ) {
+				continue;
+			}
+			wp_schedule_single_event( time() + 5 + $queued * 5, 'cp_push_post_event', array( $id, $opts ) );
+			$queued++;
+		}
+		$msg = sprintf(
+			'全量同步已排队 %d 篇（查重=%s，包含=%s），WP-Cron 后台逐篇执行，进度见推送日志与列表状态',
+			$queued,
+			'overwrite' === $opts['dedup'] ? '覆盖' : '跳过',
+			implode( ',', $opts['include'] )
+		);
+		wp_safe_redirect( add_query_arg( array( 'page' => 'cp-push-manage', 'cp_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php' ) ) );
+		exit;
 	}
 
 	/**
