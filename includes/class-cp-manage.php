@@ -22,13 +22,13 @@ class CP_Manage {
 	}
 
 	/**
-	 * 子菜单：推送管理。
+	 * 子菜单：推送。
 	 */
 	public static function menu() {
 		add_submenu_page(
 			'content-pusher',
 			'推送管理',
-			'推送管理',
+			'推送',
 			'edit_posts',
 			'cp-push-manage',
 			array( __CLASS__, 'render' )

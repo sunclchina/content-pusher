@@ -45,7 +45,7 @@ class CP_Settings {
 	}
 
 	/**
-	 * 菜单。
+	 * 菜单：主菜单「内容推送」+ 子菜单「设置」「推送」两项。
 	 */
 	public static function menu() {
 		add_menu_page(
@@ -56,6 +56,15 @@ class CP_Settings {
 			array( __CLASS__, 'render' ),
 			'dashicons-migrate',
 			81
+		);
+		// 与主菜单同 slug：点主菜单即进设置页，左侧显示「设置」「推送」两项。
+		add_submenu_page(
+			'content-pusher',
+			'内容推送设置',
+			'设置',
+			'manage_options',
+			'content-pusher',
+			array( __CLASS__, 'render' )
 		);
 	}
 
