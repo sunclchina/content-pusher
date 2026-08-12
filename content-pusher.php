@@ -5,7 +5,7 @@
  * Description:       站间内容推送：把本地发送站的文章、评论（含 AI 已生成的评论）、话题推送到目标生产站。
  *                    目标站零插件 —— 仅使用 WordPress 核心 REST API（wp/v2）+ 应用密码，推送全程 HTTPS。
  *                    话题按设置映射为目标站分类法或标签：目标站有相关插件（如 abp_topic 话题分类法）即显示，没有则落为标签或忽略。
- * Version:           1.0.0
+ * Version:           1.0.1
  * Author:            青崖
  * Text Domain:       content-pusher
  * Requires at least: 6.0
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'CP_VERSION', '1.0.0' );
+define( 'CP_VERSION', '1.0.1' );
 define( 'CP_PLUGIN_FILE', __FILE__ );
 define( 'CP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -41,6 +41,7 @@ define( 'CP_META_LAST_ERROR', '_cp_last_error' );       // 最近一次推送错
 require_once CP_PLUGIN_DIR . 'includes/class-cp-log.php';
 require_once CP_PLUGIN_DIR . 'includes/class-cp-client.php';
 require_once CP_PLUGIN_DIR . 'includes/class-cp-push.php';
+require_once CP_PLUGIN_DIR . 'includes/class-cp-export.php';
 require_once CP_PLUGIN_DIR . 'includes/class-cp-settings.php';
 require_once CP_PLUGIN_DIR . 'includes/class-cp-admin.php';
 
@@ -51,6 +52,7 @@ add_action( 'plugins_loaded', 'cp_boot' );
 function cp_boot() {
 	CP_Settings::init();
 	CP_Admin::init();
+	CP_Export::init();
 }
 
 register_activation_hook( __FILE__, 'cp_activate' );

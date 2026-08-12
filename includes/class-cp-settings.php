@@ -219,7 +219,18 @@ class CP_Settings {
 				<?php submit_button( '保存设置' ); ?>
 			</form>
 
-			<h2 class="title">③ 推送日志</h2>
+			<h2 class="title">③ 备用渠道：文件导出</h2>
+			<p>导出为 WordPress 标准 WXR 备份格式（与后台「工具 → 导出」同格式），含文章、分类、标签、话题（abp_topic）、全部评论（含 AI 已生成的评论）。</p>
+			<p>
+				<a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=cp_export_wxr' ), 'cp_export_wxr' ) ); ?>">导出 WXR 文件</a>
+			</p>
+			<div class="notice notice-warning inline">
+				<p><strong>导入提示：</strong>此文件在目标站导入时，<strong>需先安装相应的导入插件</strong>（如 wordpress-importer），再到 工具 → 导入 上传。
+				文件渠道不搬运图片（目标站无法访问本地 localhost 图片），特色图与正文图片请走上方「实时推送」渠道；
+				实时推送与文件导出是两个独立渠道，互不影响，可按需选用。</p>
+			</div>
+
+			<h2 class="title">④ 推送日志</h2>
 			<?php self::render_log(); ?>
 		</div>
 
