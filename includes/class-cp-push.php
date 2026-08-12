@@ -126,7 +126,7 @@ class CP_Push {
 			update_post_meta( $post_id, CP_META_LAST_PUSH, current_time( 'mysql' ) );
 			delete_post_meta( $post_id, CP_META_LAST_ERROR );
 
-			// 星河兼容话题：文章就位后，把本地话题建为生产站 thread 话题帖（需要远端文章 ID 做关联）。
+			// 第三方兼容话题：文章就位后，把本地话题建为生产站 thread 话题帖（需要远端文章 ID 做关联）。
 			if ( in_array( 'topics', $include, true ) && 'thread' === self::topic_mode( $settings ) ) {
 				self::push_thread_topics( $client, $remote_id, $post, $settings, $summary );
 			}
@@ -348,7 +348,7 @@ class CP_Push {
 		}
 
 		// 话题（勾选 topics 才推）：目标站有 abp_topic 分类法（相关插件）→ 建术语；否则落为标签。
-		// thread（星河兼容）模式不在这里建标签，由主流程推完文章后建 thread 话题帖。
+		// thread（第三方兼容）模式不在这里建标签，由主流程推完文章后建 thread 话题帖。
 		if ( in_array( 'topics', $include, true ) && 'thread' !== self::topic_mode( $settings ) ) {
 			$topic_ids = self::push_topics( $client, $post, $settings, $summary );
 			if ( $topic_ids ) {
@@ -467,7 +467,7 @@ class CP_Push {
 
 	/**
 	 * 话题推送方式：auto = 目标站有 abp_topic 分类法（相关插件）用 abp_topic，否则用标签；
-	 * thread = 星河兼容（目标站有星河插件时，话题建为 thread 话题帖）；off = 不推。
+	 * thread = 第三方兼容（目标站有支持 thread 话题的第三方插件时，话题建为 thread 话题帖）；off = 不推。
 	 *
 	 * @param array $settings 设置。
 	 * @return string off|post_tag|abp_topic|thread
@@ -492,7 +492,7 @@ class CP_Push {
 	}
 
 	/**
-	 * 星河兼容话题：本地 abp_topic 话题 → 生产站 thread 话题帖（按标题查重复用）。
+	 * 第三方兼容话题：本地 abp_topic 话题 → 生产站 thread 话题帖（按标题查重复用）。
 	 * 关联：thread 帖写 xhai_postparent=远端文章 ID；文章写 xhai_thread=threadID 列表（覆盖式）。
 	 * 目标站需装配套兼容插件（target/），否则创建/关联会被目标站拒绝或忽略。
 	 *
@@ -516,7 +516,7 @@ class CP_Push {
 				continue;
 			}
 			$ids[] = $tid;
-			// thread 帖 → 文章关联（星河数据结构：thread 帖 xhai_postparent = 文章 ID）。
+			// thread 帖 → 文章关联（第三方插件数据结构：thread 帖 xhai_postparent = 文章 ID）。
 			try {
 				$client->put( '/wp-json/wp/v2/thread/' . $tid, array( 'meta' => array( 'xhai_postparent' => $remote_post_id ) ) );
 			} catch ( CP_Error $e ) {

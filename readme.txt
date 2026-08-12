@@ -32,7 +32,7 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 == Changelog ==
 
 = 1.2.0 =
-* 话题新增星河兼容模式：thread 话题帖推送（查重复用，关联 meta 未开放时降级）。
+* 话题新增第三方兼容模式：thread 话题帖推送（查重复用，关联 meta 未开放时降级）。
 * 连接测试权限探测修复（context=edit）。
 
 = 1.1.0 =
