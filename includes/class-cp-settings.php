@@ -225,9 +225,11 @@ class CP_Settings {
 				<a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=cp_export_wxr' ), 'cp_export_wxr' ) ); ?>">导出 WXR 文件</a>
 			</p>
 			<div class="notice notice-warning inline">
-				<p><strong>导入提示：</strong>此文件在目标站导入时，<strong>需先安装相应的导入插件</strong>（如 wordpress-importer），再到 工具 → 导入 上传。
-				文件渠道不搬运图片（目标站无法访问本地 localhost 图片），特色图与正文图片请走上方「实时推送」渠道；
-				实时推送与文件导出是两个独立渠道，互不影响，可按需选用。</p>
+				<p><strong>导入提示：</strong>此文件在目标站导入时，<strong>需先安装相应的导入插件</strong>（wordpress-importer，WordPress 官方导入插件），再到 工具 → 导入 上传。
+				查重说明：文章按别名（slug）查重——已存在则跳过不重复建；分类/标签按名称合并；<strong>评论无查重，请勿重复导入同一文件</strong>（重复导入会评论重复）；
+				本文件只含文章，不含页面/菜单，不会造成页面菜单重复混乱。
+				文件渠道不搬运图片（目标站无法访问本地 localhost 图片），特色图与正文图片请走「实时推送」渠道；
+				实时推送与文件导出是两个独立渠道，互不影响：首次搬站/备份用文件渠道，日常持续同步用实时推送（实时渠道有完整去重）。</p>
 			</div>
 
 			<h2 class="title">④ 推送日志</h2>
