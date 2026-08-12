@@ -19,4 +19,6 @@ delete_post_meta_by_key( '_cp_remote_url' );
 delete_post_meta_by_key( '_cp_remote_comment_id' );
 delete_post_meta_by_key( '_cp_last_push' );
 delete_post_meta_by_key( '_cp_last_error' );
-delete_comment_meta_by_key( '_cp_remote_comment_id' );
+// delete_comment_meta_by_key 在部分环境（PHP 8.4）会崩溃，改用直接 SQL。
+global $wpdb;
+$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->commentmeta} WHERE meta_key = %s", '_cp_remote_comment_id' ) );

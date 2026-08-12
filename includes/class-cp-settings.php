@@ -27,6 +27,8 @@ class CP_Settings {
 			'topic_mode'              => 'auto', // 话题：auto=目标站有 abp_topic 用它否则标签；post_tag/abp_topic/off
 			'sync_images'             => '1',  // 同步特色图与正文图片
 			'push_status'             => 'follow', // 远端状态：follow/publish/draft
+			'dedup'                   => 'overwrite', // 同名查重：overwrite 覆盖更新 / skip 跳过
+			'include_default'         => array( 'cover', 'excerpt', 'comments', 'topics' ), // 默认推送内容
 			'timeout'                 => 60,   // 单请求超时（秒）
 			'retries'                 => 2,    // 重试次数
 		);
@@ -100,6 +102,12 @@ class CP_Settings {
 		}
 		$out['topic_mode']  = in_array( isset( $in['topic_mode'] ) ? $in['topic_mode'] : '', array( 'auto', 'post_tag', 'abp_topic', 'off' ), true ) ? $in['topic_mode'] : 'auto';
 		$out['push_status'] = in_array( isset( $in['push_status'] ) ? $in['push_status'] : '', array( 'follow', 'publish', 'draft' ), true ) ? $in['push_status'] : 'follow';
+		$out['dedup']       = in_array( isset( $in['dedup'] ) ? $in['dedup'] : '', array( 'skip', 'overwrite' ), true ) ? $in['dedup'] : 'overwrite';
+		$inc = ( isset( $in['include_default'] ) && is_array( $in['include_default'] ) ) ? array_map( 'sanitize_key', wp_unslash( $in['include_default'] ) ) : array();
+		$out['include_default'] = array_values( array_intersect( $inc, array( 'cover', 'excerpt', 'comments', 'topics' ) ) );
+		if ( ! $out['include_default'] ) {
+			$out['include_default'] = array( 'cover', 'excerpt', 'comments', 'topics' );
+		}
 		$out['timeout']     = min( 120, max( 10, (int) ( isset( $in['timeout'] ) ? $in['timeout'] : 60 ) ) );
 		$out['retries']     = min( 5, max( 0, (int) ( isset( $in['retries'] ) ? $in['retries'] : 2 ) ) );
 		return $out;
@@ -205,6 +213,26 @@ class CP_Settings {
 						<td>
 							<label><input type="checkbox" name="<?php echo esc_attr( CP_OPTION ); ?>[sync_images]" value="1" <?php checked( $s['sync_images'], '1' ); ?> />
 							同步特色图与正文图片（本地上传目标站媒体库并重写正文 URL；外部图片转存）</label>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">同名查重</th>
+						<td>
+							<select name="<?php echo esc_attr( CP_OPTION ); ?>[dedup]">
+								<option value="overwrite" <?php selected( $s['dedup'], 'overwrite' ); ?>>覆盖更新（目标站已有同名文章则更新它）</option>
+								<option value="skip" <?php selected( $s['dedup'], 'skip' ); ?>>跳过（目标站已有同名文章则不推）</option>
+							</select>
+							<p class="description">默认查重策略；「推送管理」页每次推送可临时切换。</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">默认推送内容</th>
+						<td>
+							<label><input type="checkbox" name="<?php echo esc_attr( CP_OPTION ); ?>[include_default][]" value="cover" <?php checked( in_array( 'cover', $s['include_default'], true ) ); ?> /> 封面</label>
+							<label><input type="checkbox" name="<?php echo esc_attr( CP_OPTION ); ?>[include_default][]" value="excerpt" <?php checked( in_array( 'excerpt', $s['include_default'], true ) ); ?> /> 摘要</label>
+							<label><input type="checkbox" name="<?php echo esc_attr( CP_OPTION ); ?>[include_default][]" value="comments" <?php checked( in_array( 'comments', $s['include_default'], true ) ); ?> /> 评论</label>
+							<label><input type="checkbox" name="<?php echo esc_attr( CP_OPTION ); ?>[include_default][]" value="topics" <?php checked( in_array( 'topics', $s['include_default'], true ) ); ?> /> 话题</label>
+							<p class="description">推送默认包含的内容（文章本体与分类/标签始终推送）；「推送管理」页每次可临时勾选。</p>
 						</td>
 					</tr>
 					<tr>

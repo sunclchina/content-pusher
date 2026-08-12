@@ -5,7 +5,7 @@
  * Description:       站间内容推送：把本地发送站的文章、评论（含 AI 已生成的评论）、话题推送到目标生产站。
  *                    目标站零插件 —— 仅使用 WordPress 核心 REST API（wp/v2）+ 应用密码，推送全程 HTTPS。
  *                    话题按设置映射为目标站分类法或标签：目标站有相关插件（如 abp_topic 话题分类法）即显示，没有则落为标签或忽略。
- * Version:           1.0.0
+ * Version:           1.1.0
  * Author:            青崖
  * Text Domain:       content-pusher
  * Requires at least: 6.0
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'CP_VERSION', '1.0.0' );
+define( 'CP_VERSION', '1.1.0' );
 define( 'CP_PLUGIN_FILE', __FILE__ );
 define( 'CP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -43,6 +43,7 @@ require_once CP_PLUGIN_DIR . 'includes/class-cp-client.php';
 require_once CP_PLUGIN_DIR . 'includes/class-cp-push.php';
 require_once CP_PLUGIN_DIR . 'includes/class-cp-settings.php';
 require_once CP_PLUGIN_DIR . 'includes/class-cp-admin.php';
+require_once CP_PLUGIN_DIR . 'includes/class-cp-manage.php';
 
 add_action( 'plugins_loaded', 'cp_boot' );
 /**
@@ -51,6 +52,7 @@ add_action( 'plugins_loaded', 'cp_boot' );
 function cp_boot() {
 	CP_Settings::init();
 	CP_Admin::init();
+	CP_Manage::init();
 }
 
 register_activation_hook( __FILE__, 'cp_activate' );
@@ -92,12 +94,13 @@ add_action( 'transition_post_status', 'cp_on_publish', 10, 3 );
 /**
  * WP-Cron 推送任务（自动推送 / 批量推送共用）。
  *
- * @param int $post_id 本地文章 ID。
+ * @param int   $post_id 本地文章 ID。
+ * @param array $opts    推送选项（include/dedup），批量推送传入。
  */
-function cp_push_post_cron( $post_id ) {
-	CP_Push::push_post( (int) $post_id );
+function cp_push_post_cron( $post_id, $opts = array() ) {
+	CP_Push::push_post( (int) $post_id, is_array( $opts ) ? $opts : array() );
 }
-add_action( 'cp_push_post_event', 'cp_push_post_cron', 10, 1 );
+add_action( 'cp_push_post_event', 'cp_push_post_cron', 10, 2 );
 
 /**
  * 卸载：清理本插件全部数据。

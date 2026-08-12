@@ -2,8 +2,13 @@
 /**
  * 核心推送逻辑：文章（含分类/标签/话题/特色图/正文图片/摘要）+ 评论（真实评论与 AI 已生成评论）。
  *
- * 匹配规则：优先用本地记录的远端 ID（_cp_remote_id）；无记录则按 slug 匹配目标站文章（同名更新，不重复建）；
- * 仍未命中则新建。评论按本地 ID 记录远端评论 ID（_cp_remote_comment_id），重推自动跳过已推评论。
+ * 推送选项（opts）：
+ *   include: array 可选内容，cover=封面 / excerpt=摘要 / comments=评论 / topics=话题；
+ *            缺省（null）用设置默认 include_default。
+ *   dedup:   'overwrite' 同名覆盖更新（默认）| 'skip' 同名跳过。
+ *
+ * 匹配规则：优先本地记录的远端 ID（_cp_remote_id）→ 按 slug 匹配目标站文章 → 仍未命中新建。
+ * 评论按本地 ID 记录远端评论 ID（_cp_remote_comment_id），重推自动跳过已推评论。
  *
  * @package Content_Pusher
  */
@@ -25,10 +30,41 @@ class CP_Push {
 	}
 
 	/**
-	 * 推送一篇文章（含评论）。
+	 * 解析可选内容（include）。
+	 *
+	 * @param mixed $opts    推送选项。
+	 * @param array $settings 设置。
+	 * @return string[]
+	 */
+	private static function parse_include( $opts, $settings ) {
+		$include = ( is_array( $opts ) && isset( $opts['include'] ) && null !== $opts['include'] )
+			? $opts['include']
+			: ( isset( $settings['include_default'] ) && is_array( $settings['include_default'] )
+				? $settings['include_default']
+				: array( 'cover', 'excerpt', 'comments', 'topics' ) );
+		$include = array_map( 'sanitize_key', (array) $include );
+		return array_values( array_intersect( $include, array( 'cover', 'excerpt', 'comments', 'topics' ) ) );
+	}
+
+	/**
+	 * 解析查重策略（dedup）。
+	 *
+	 * @param mixed $opts    推送选项。
+	 * @param array $settings 设置。
+	 * @return string overwrite|skip
+	 */
+	private static function parse_dedup( $opts, $settings ) {
+		$dedup = ( is_array( $opts ) && isset( $opts['dedup'] ) && $opts['dedup'] )
+			? $opts['dedup']
+			: ( isset( $settings['dedup'] ) ? $settings['dedup'] : 'overwrite' );
+		return in_array( $dedup, array( 'skip', 'overwrite' ), true ) ? $dedup : 'overwrite';
+	}
+
+	/**
+	 * 推送一篇文章（可选项：封面/摘要/评论/话题；查重：跳过/覆盖）。
 	 *
 	 * @param int   $post_id 本地文章 ID。
-	 * @param array $opts    预留选项。
+	 * @param array $opts    推送选项（include/dedup）。
 	 * @return array{ok:bool, action:string, remote_id?:int, remote_url?:string, error?:string, summary:array}
 	 */
 	public static function push_post( $post_id, $opts = array() ) {
@@ -48,6 +84,9 @@ class CP_Push {
 			return array( 'ok' => false, 'action' => 'error', 'error' => '回收站文章不推送', 'summary' => array() );
 		}
 
+		$include = self::parse_include( $opts, $settings );
+		$dedup   = self::parse_dedup( $opts, $settings );
+
 		@set_time_limit( 0 );
 		$summary = array(
 			'media_uploaded'   => 0,
@@ -58,20 +97,36 @@ class CP_Push {
 		);
 
 		try {
-			$remote_id = self::resolve_remote_post( $client, $post );
+			$res       = self::resolve_remote_post( $client, $post );
+			$remote_id = $res['remote_id'];
+
+			// 查重：同名/已存在，且策略为跳过 → 不推送。
+			if ( $remote_id && 'skip' === $dedup ) {
+				$remote_url = (string) get_post_meta( $post_id, CP_META_REMOTE_URL, true );
+				update_post_meta( $post_id, CP_META_LAST_PUSH, current_time( 'mysql' ) );
+				CP_Log::info( 'push', sprintf( '文章 %d《%s》查重跳过：目标站已有（远端 ID=%d，匹配=%s）', $post_id, $post->post_title, $remote_id, $res['matched'] ) );
+				return array(
+					'ok'         => true,
+					'action'     => 'skipped',
+					'remote_id'  => $remote_id,
+					'remote_url' => $remote_url,
+					'summary'    => $summary,
+				);
+			}
+
 			if ( $remote_id ) {
 				$action = 'update';
-				self::update_remote_post( $client, $remote_id, $post, $settings, $summary );
+				self::update_remote_post( $client, $remote_id, $post, $settings, $summary, $include );
 			} else {
 				$action = 'create';
-				$remote_id = self::create_remote_post( $client, $post, $settings, $summary );
+				$remote_id = self::create_remote_post( $client, $post, $settings, $summary, $include );
 			}
 
 			update_post_meta( $post_id, CP_META_REMOTE_ID, $remote_id );
 			update_post_meta( $post_id, CP_META_LAST_PUSH, current_time( 'mysql' ) );
 			delete_post_meta( $post_id, CP_META_LAST_ERROR );
 
-			if ( ! empty( $settings['push_comments'] ) ) {
+			if ( in_array( 'comments', $include, true ) && ! empty( $settings['push_comments'] ) ) {
 				$cr = self::push_comments( $client, $post_id, $remote_id, $settings );
 				$summary['comments_pushed']  = $cr['pushed'];
 				$summary['comments_skipped'] = $cr['skipped'];
@@ -135,11 +190,11 @@ class CP_Push {
 	/* ================= 文章主体 ================= */
 
 	/**
-	 * 解析远端文章：本地记录 ID → slug 匹配 → 0（需新建）。
+	 * 解析远端文章：本地记录 ID → slug 匹配 → 无。
 	 *
 	 * @param CP_Client $client 客户端。
 	 * @param WP_Post   $post   本地文章。
-	 * @return int 远端文章 ID，0 表示不存在。
+	 * @return array{remote_id:int, matched:string} matched: none|meta|slug
 	 * @throws CP_Error
 	 */
 	private static function resolve_remote_post( $client, $post ) {
@@ -148,10 +203,10 @@ class CP_Push {
 			try {
 				$r = $client->get( '/wp-json/wp/v2/posts/' . $rid, array( 'context' => 'edit' ) );
 				if ( is_array( $r ) && ! empty( $r['id'] ) ) {
-					return (int) $r['id'];
+					return array( 'remote_id' => (int) $r['id'], 'matched' => 'meta' );
 				}
 			} catch ( CP_Error $e ) {
-				// 远端已删除（404/410）→ 重新创建；其余错误上抛。
+				// 远端已删除（404/410）→ 视为不存在；其余错误上抛。
 				if ( 404 !== $e->getCode() && 410 !== $e->getCode() ) {
 					throw $e;
 				}
@@ -167,9 +222,9 @@ class CP_Push {
 			)
 		);
 		if ( is_array( $found ) && ! empty( $found[0]['id'] ) ) {
-			return (int) $found[0]['id'];
+			return array( 'remote_id' => (int) $found[0]['id'], 'matched' => 'slug' );
 		}
-		return 0;
+		return array( 'remote_id' => 0, 'matched' => 'none' );
 	}
 
 	/**
@@ -179,11 +234,12 @@ class CP_Push {
 	 * @param WP_Post   $post     本地文章。
 	 * @param array     $settings 设置。
 	 * @param array     $summary  汇总（引用）。
+	 * @param string[]  $include  可选内容。
 	 * @return int 远端文章 ID。
 	 * @throws CP_Error
 	 */
-	private static function create_remote_post( $client, $post, $settings, &$summary ) {
-		$payload = self::build_payload( $client, $post, $settings, $summary, true );
+	private static function create_remote_post( $client, $post, $settings, &$summary, $include ) {
+		$payload = self::build_payload( $client, $post, $settings, $summary, true, $include );
 		try {
 			$r = $client->post( '/wp-json/wp/v2/posts', $payload );
 		} catch ( CP_Error $e ) {
@@ -211,11 +267,12 @@ class CP_Push {
 	 * @param WP_Post   $post      本地文章。
 	 * @param array     $settings  设置。
 	 * @param array     $summary   汇总（引用）。
+	 * @param string[]  $include   可选内容。
 	 * @throws CP_Error
 	 */
-	private static function update_remote_post( $client, $remote_id, $post, $settings, &$summary ) {
+	private static function update_remote_post( $client, $remote_id, $post, $settings, &$summary, $include ) {
 		// 更新不传日期：远端日期以首次创建为准（本地副本日期一致，避免误改）。
-		$payload = self::build_payload( $client, $post, $settings, $summary, false );
+		$payload = self::build_payload( $client, $post, $settings, $summary, false, $include );
 		$r = $client->put( '/wp-json/wp/v2/posts/' . $remote_id, $payload );
 		if ( ! is_array( $r ) || empty( $r['id'] ) ) {
 			throw new CP_Error( '更新远端文章未返回 id：' . CP_Client::snippet( $r ) );
@@ -226,15 +283,16 @@ class CP_Push {
 	/**
 	 * 组装远端文章 payload。
 	 *
-	 * @param CP_Client $client   客户端。
-	 * @param WP_Post   $post     本地文章。
-	 * @param array     $settings 设置。
-	 * @param array     $summary  汇总（引用）。
-	 * @param bool      $is_create 是否新建（新建带日期，更新不带）。
+	 * @param CP_Client $client    客户端。
+	 * @param WP_Post   $post      本地文章。
+	 * @param array     $settings  设置。
+	 * @param array     $summary   汇总（引用）。
+	 * @param bool      $is_create 是否新建（新建带日期与 slug）。
+	 * @param string[]  $include   可选内容（cover/excerpt/topics）。
 	 * @return array
 	 * @throws CP_Error
 	 */
-	private static function build_payload( $client, $post, $settings, &$summary, $is_create ) {
+	private static function build_payload( $client, $post, $settings, &$summary, $is_create, $include ) {
 		$content = $post->post_content;
 		if ( ! empty( $settings['sync_images'] ) ) {
 			$content = self::rewrite_content_images( $client, $content, $summary );
@@ -243,11 +301,14 @@ class CP_Push {
 		$payload = array(
 			'title'          => $post->post_title,
 			'content'        => $content,
-			'excerpt'        => $post->post_excerpt,
 			'status'         => self::remote_status( $post, $settings ),
 			'comment_status' => $post->comment_status ? $post->comment_status : 'open',
 			'ping_status'    => $post->ping_status ? $post->ping_status : 'open',
 		);
+		// 摘要：未勾选时不传（更新时保留远端已有摘要）。
+		if ( in_array( 'excerpt', $include, true ) ) {
+			$payload['excerpt'] = $post->post_excerpt;
+		}
 		// 仅在新建时传 slug（中文别名已是编码态，更新时重传可能被二次清洗导致远端链接变化；
 		// 新建后本地即记录远端 ID，后续推送走 ID 匹配，不会因 slug 差异重复建文）。
 		if ( $is_create && $post->post_name ) {
@@ -281,20 +342,20 @@ class CP_Push {
 			$payload['tags'] = $tag_ids;
 		}
 
-		// 话题：目标站有 abp_topic 分类法（相关插件）→ 建术语；否则落为标签；off → 不推。
-		$topic_ids = self::push_topics( $client, $post, $settings, $summary );
-		if ( $topic_ids ) {
-			$payload[ self::topic_param( $settings ) ] = $topic_ids;
+		// 话题（勾选 topics 才推）：目标站有 abp_topic 分类法（相关插件）→ 建术语；否则落为标签。
+		if ( in_array( 'topics', $include, true ) ) {
+			$topic_ids = self::push_topics( $client, $post, $settings, $summary );
+			if ( $topic_ids ) {
+				$payload[ self::topic_param( $settings ) ] = $topic_ids;
+			}
 		}
 
-		// 特色图
-		if ( ! empty( $settings['sync_images'] ) ) {
-			$thumb = get_post_thumbnail_id( $post->ID );
-			if ( $thumb ) {
-				$media = self::upload_attachment( $client, (int) $thumb, $summary );
-				if ( $media ) {
-					$payload['featured_media'] = $media['id'];
-				}
+		// 特色图（勾选 cover 或全局图片同步开启时）。
+		$thumb = get_post_thumbnail_id( $post->ID );
+		if ( $thumb && ( ! empty( $settings['sync_images'] ) || in_array( 'cover', $include, true ) ) ) {
+			$media = self::upload_attachment( $client, (int) $thumb, $summary );
+			if ( $media ) {
+				$payload['featured_media'] = $media['id'];
 			}
 		}
 
