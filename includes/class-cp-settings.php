@@ -217,7 +217,8 @@ class CP_Settings {
 								<option value="off" <?php selected( $s['topic_mode'], 'off' ); ?>>不推送话题</option>
 							</select>
 							<p class="description">目标站有相关插件（话题分类法/主题支持）即可显示话题；没有则按标签归档或不显示。
-							星河兼容：生产站装有星河AI工具箱时选此项，本地话题以 thread 话题帖形式推送到生产站（/thread/ 话题页），并尝试与文章建立关联。</p>
+							星河兼容：生产站装有星河AI工具箱时选此项，本地话题以 thread 话题帖形式推送到生产站（/thread/ 话题页）。
+							<b>需先在目标站安装配套兼容插件</b>（插件包 target/ 目录，恢复 thread 创建权限——星河默认锁定 create_posts），否则话题帖创建会被目标站拒绝。</p>
 						</td>
 					</tr>
 					<tr>
