@@ -276,9 +276,11 @@ class CP_Settings {
 				body.set('app_user', document.getElementById('cp_app_user').value);
 				body.set('app_password', document.getElementById('cp_app_password').value);
 				fetch(ajaxurl, { method: 'POST', body: body, credentials: 'same-origin' })
-					.then(function (r) { return r.json(); })
-					.then(function (j) {
-						if (j.ok) {
+					.then(function (r) { return r.text(); })
+					.then(function (t) {
+						var j = null;
+						try { j = JSON.parse(t); } catch (e) { j = null; }
+						if (j && j.ok) {
 							var tax = (j.taxonomies || []).join(', ') || '（无）';
 							var topicNote = (j.taxonomies || []).indexOf('abp_topic') >= 0
 								? '目标站已有 abp_topic 话题分类法，话题将按话题推送'
@@ -286,12 +288,15 @@ class CP_Settings {
 							box.className = 'cp-test-result cp-test-ok';
 							box.innerHTML = '✅ 连接成功：用户「' + j.user + '」（' + (j.roles || []).join(',') + '）'
 								+ (j.can_edit ? '，可写文章' : '，⚠️ 无编辑权限') + '。分类法：' + tax + '。' + topicNote;
+						} else if (j) {
+							box.className = 'cp-test-result cp-test-fail';
+							box.textContent = '❌ ' + (j.error || JSON.stringify(j));
 						} else {
 							box.className = 'cp-test-result cp-test-fail';
-							box.textContent = '❌ ' + j.error;
+							box.textContent = '❌ 响应无法解析：' + String(t).slice(0, 300);
 						}
 					})
-					.catch(function (e) { box.className = 'cp-test-result cp-test-fail'; box.textContent = '❌ 请求失败：' + e; })
+					.catch(function (e) { box.className = 'cp-test-result cp-test-fail'; box.textContent = '❌ 请求失败：' + (e && e.message ? e.message : e); })
 					.finally(function () { btn.disabled = false; });
 			});
 		})();
@@ -365,7 +370,11 @@ class CP_Settings {
 
 		$settings = wp_parse_args( $form, CP_Settings::defaults() );
 		$client   = new CP_Client( $settings );
-		wp_send_json( $client->test_connection() );
+		try {
+			wp_send_json( $client->test_connection() );
+		} catch ( Throwable $e ) {
+			wp_send_json( array( 'ok' => false, 'error' => '服务器异常：' . $e->getMessage() ) );
+		}
 	}
 
 	/**
