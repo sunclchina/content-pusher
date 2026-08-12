@@ -43,6 +43,7 @@ class CP_Settings {
 		add_action( 'admin_post_cp_test_connection', array( __CLASS__, 'handle_test' ) );
 		add_action( 'wp_ajax_cp_test_connection', array( __CLASS__, 'handle_test' ) ); // JS 走 admin-ajax.php（ajaxurl）
 		add_action( 'admin_post_cp_clear_log', array( __CLASS__, 'handle_clear_log' ) );
+		add_action( 'admin_post_cp_check_update', array( __CLASS__, 'handle_check_update' ) );
 	}
 
 	/**
@@ -135,6 +136,10 @@ class CP_Settings {
 		?>
 		<div class="wrap">
 			<h1>内容推送 <span class="cp-sub">本地发送站 → 目标生产站（目标站零插件，仅核心 REST API + 应用密码，全程 HTTPS）</span></h1>
+
+			<?php if ( isset( $_GET['cp_msg'] ) ) : ?>
+				<div class="notice notice-success is-dismissible"><p><?php echo esc_html( wp_unslash( $_GET['cp_msg'] ) ); ?></p></div>
+			<?php endif; ?>
 
 			<?php settings_errors( 'cp_settings' ); ?>
 
@@ -260,7 +265,11 @@ class CP_Settings {
 				<?php submit_button( '保存设置' ); ?>
 			</form>
 
-			<h2 class="title">③ 推送日志</h2>
+			<h2 class="title">④ 自动升级</h2>
+			<p>从 GitHub Release（sunclchina/content-pusher）自动升级：后台「插件」页出现标准「有可用更新」提示，一键升级。
+			<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=cp_check_update' ), 'cp_check_update' ) ); ?>">检查更新</a></p>
+
+			<h2 class="title">⑤ 推送日志</h2>
 			<?php self::render_log(); ?>
 		</div>
 
@@ -379,6 +388,26 @@ class CP_Settings {
 		} catch ( Throwable $e ) {
 			wp_send_json( array( 'ok' => false, 'error' => '服务器异常：' . $e->getMessage() ) );
 		}
+	}
+
+	/**
+	 * 检查更新（admin-post）。
+	 */
+	public static function handle_check_update() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( -1 );
+		}
+		check_admin_referer( 'cp_check_update' );
+		$r = CP_Updater::force_check();
+		if ( ! $r['ok'] ) {
+			$msg = '检查更新失败：' . $r['error'];
+		} elseif ( $r['has_update'] ) {
+			$msg = sprintf( '发现新版本 %s（当前 %s），请到 插件 → 已安装的插件 页升级。', $r['latest'], $r['current'] );
+		} else {
+			$msg = sprintf( '已是最新版本 %s。', $r['current'] );
+		}
+		wp_safe_redirect( add_query_arg( array( 'page' => 'content-pusher', 'cp_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php' ) ) );
+		exit;
 	}
 
 	/**

@@ -44,6 +44,7 @@ require_once CP_PLUGIN_DIR . 'includes/class-cp-push.php';
 require_once CP_PLUGIN_DIR . 'includes/class-cp-settings.php';
 require_once CP_PLUGIN_DIR . 'includes/class-cp-admin.php';
 require_once CP_PLUGIN_DIR . 'includes/class-cp-manage.php';
+require_once CP_PLUGIN_DIR . 'includes/class-cp-updater.php';
 
 add_action( 'plugins_loaded', 'cp_boot' );
 /**
@@ -53,6 +54,7 @@ function cp_boot() {
 	CP_Settings::init();
 	CP_Admin::init();
 	CP_Manage::init();
+	CP_Updater::init();
 }
 
 register_activation_hook( __FILE__, 'cp_activate' );

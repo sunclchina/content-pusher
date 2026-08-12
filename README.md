@@ -81,6 +81,16 @@
 - 评论 meta：`_cp_remote_comment_id`
 - 卸载（uninstall.php）全部清理。
 
+## 自动升级
+
+从 GitHub Release（sunclchina/content-pusher）自动升级：后台「插件」页出现标准「有可用更新」提示，一键走 WP 自带升级流程；设置页有「检查更新」按钮。
+
+## 赞赏
+
+如果这个插件对你有帮助，欢迎请作者喝杯茶 ☕
+
+![赞赏码](assets/赞赏码.jpg)
+
 ## 版本记录
 
 ### 1.2.0
