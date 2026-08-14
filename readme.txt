@@ -4,7 +4,7 @@ Tags: sync, rest-api, push, comments, https
 Requires at least: 6.0
 Tested up to: 7.0.3
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -30,6 +30,9 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 4. 从文章列表行操作/批量操作或编辑页推送；开启自动推送后本地发布即自动推送。
 
 == Changelog ==
+
+= 1.2.2 =
+* Plugin URI 改为真实仓库地址。
 
 = 1.2.1 =
 * 修复 add_meta_boxes 回调参数不匹配导致编辑页 500（meta_box 第二参数加默认值）。
