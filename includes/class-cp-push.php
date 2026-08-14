@@ -450,6 +450,20 @@ class CP_Push {
 				$r = $client->post( '/wp-json/wp/v2/comments', $payload );
 				if ( is_array( $r ) && ! empty( $r['id'] ) ) {
 					$remote_cid = (int) $r['id'];
+					// 翁老规则：本地批准 → 远端必须批准（无视目标站「评论必须人工批准」）。
+					// 创建后检查远端状态，非 approved 立即改批。
+					if ( ! empty( $r['status'] ) && 'approved' !== (string) $r['status'] ) {
+						try {
+							$fix = $client->post( '/wp-json/wp/v2/comments/' . $remote_cid, array( 'status' => 'approve' ) );
+							if ( is_array( $fix ) && ! empty( $fix['status'] ) && 'approved' === (string) $fix['status'] ) {
+								$r = $fix;
+							} else {
+								CP_Log::warn( 'comment', sprintf( '璇勮 %d 杩滅鐘舵€?%s锛岃瘯鍥惧啀娆℃壒鍑嗘湭纭', $c->comment_ID, isset( $r['status'] ) ? $r['status'] : '?' ) );
+							}
+						} catch ( CP_Error $e ) {
+							CP_Log::warn( 'comment', sprintf( '璇勮 %d 杩滅鎵瑰噯澶辫触锛?s', $c->comment_ID, $e->getMessage() ) );
+						}
+					}
 					update_comment_meta( $c->comment_ID, CP_META_REMOTE_COMMENT, $remote_cid );
 					$parent_map[ (int) $c->comment_ID ] = $remote_cid;
 					$pushed++;
