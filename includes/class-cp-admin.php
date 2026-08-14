@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * 后台管理：文章列表推送状态列、行操作（推送/补推评论）、批量推送、编辑页推送框、通知。
  *
@@ -212,7 +212,7 @@ class CP_Admin {
 	 * @param string $post_type 文章类型。
 	 * @param WP_Post $post     文章。
 	 */
-	public static function meta_box( $post_type, $post ) {
+	public static function meta_box( $post_type, $post = null ) {
 		if ( 'post' !== $post_type ) {
 			return;
 		}
